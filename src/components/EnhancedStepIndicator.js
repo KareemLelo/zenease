@@ -1,3 +1,4 @@
+// src/components/EnhancedStepIndicator.js
 import React from 'react';
 import { useIntegration } from '../contexts/IntegrationContext';
 
@@ -93,4 +94,4 @@ const EnhancedStepIndicator = () => {
   );
 };
 
-export default StepIndicator;
+export default EnhancedStepIndicator;

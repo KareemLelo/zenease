@@ -21,7 +21,7 @@ export const useIntegration = () => useContext(IntegrationContext);
 // Provider component
 export const IntegrationProvider = ({ children }) => {
   // Core states
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0); // Start with direction selection
   const [apiKey, setApiKey] = useState('demo_api_key_12345'); // Default for demo
   const [selectedEndpoint, setSelectedEndpoint] = useState('employees'); // Default for demo
   const [selectedMethod, setSelectedMethod] = useState('GET'); // Default for demo
@@ -41,6 +41,25 @@ export const IntegrationProvider = ({ children }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState(0);
   const [showSaveModal, setShowSaveModal] = useState(false);
+
+  // New states for bidirectional integration
+  const [integrationDirection, setIntegrationDirection] = useState('zenhr_to_external'); // 'zenhr_to_external', 'external_to_zenhr', 'bidirectional'
+  const [externalSystem, setExternalSystem] = useState({
+    name: '',
+    baseUrl: '',
+    endpoint: '',
+    method: 'GET',
+    auth: {
+      type: 'none', // 'none', 'basic', 'bearer', 'api_key'
+      username: '',
+      password: '',
+      token: '',
+      key: '',
+      value: ''
+    }
+  });
+  const [externalSystemFields, setExternalSystemFields] = useState([]);
+  const [mappedFields, setMappedFields] = useState({});
 
   // Update available fields when endpoint changes
   useEffect(() => {
@@ -116,6 +135,42 @@ export const IntegrationProvider = ({ children }) => {
       setApiRequest(JSON.stringify(request, null, 2));
     }
   }, [currentStep, selectedEndpoint, selectedMethod, selectedFields, filterValues, pagination, fieldValues, apiKey]);
+
+  // Get steps based on integration direction
+  const getSteps = () => {
+    if (integrationDirection === 'zenhr_to_external') {
+      return [
+        { id: 0, label: 'Direction' },
+        { id: 1, label: 'ZenHR Endpoint' },
+        { id: 2, label: 'Choose Fields' },
+        { id: 7, label: 'External System' },
+        { id: 9, label: 'Map Fields' },
+        { id: 5, label: 'Review' },
+        { id: 6, label: 'Test' }
+      ];
+    } else if (integrationDirection === 'external_to_zenhr') {
+      return [
+        { id: 0, label: 'Direction' },
+        { id: 7, label: 'External System' },
+        { id: 8, label: 'Define Fields' },
+        { id: 1, label: 'ZenHR Endpoint' },
+        { id: 9, label: 'Map Fields' },
+        { id: 5, label: 'Review' },
+        { id: 6, label: 'Test' }
+      ];
+    } else { // bidirectional
+      return [
+        { id: 0, label: 'Direction' },
+        { id: 1, label: 'ZenHR Endpoint' },
+        { id: 2, label: 'ZenHR Fields' },
+        { id: 7, label: 'External System' },
+        { id: 8, label: 'External Fields' },
+        { id: 9, label: 'Map Fields' },
+        { id: 5, label: 'Review' },
+        { id: 6, label: 'Test' }
+      ];
+    }
+  };
 
   // Methods
   const toggleFieldSelection = (fieldId) => {
@@ -331,7 +386,11 @@ export const IntegrationProvider = ({ children }) => {
       fields: selectedFields,
       filters: filterValues,
       pagination,
-      fieldValues
+      fieldValues,
+      integrationDirection,
+      externalSystem,
+      externalSystemFields,
+      mappedFields
     };
     
     setSavedConfigurations(prev => [...prev, config]);
@@ -340,19 +399,48 @@ export const IntegrationProvider = ({ children }) => {
   };
 
   const loadConfiguration = (config) => {
-    setSelectedEndpoint(config.endpoint);
-    setSelectedMethod(config.method);
-    setSelectedFields(config.fields);
+    setSelectedEndpoint(config.endpoint || 'employees');
+    setSelectedMethod(config.method || 'GET');
+    setSelectedFields(config.fields || []);
     setFilterValues(config.filters || {});
     setPagination(config.pagination || { page: 1, per_page: 10 });
     setFieldValues(config.fieldValues || {});
+    setIntegrationDirection(config.integrationDirection || 'zenhr_to_external');
+    setExternalSystem(config.externalSystem || {
+      name: '',
+      baseUrl: '',
+      endpoint: '',
+      method: 'GET',
+      auth: {
+        type: 'none',
+        username: '',
+        password: '',
+        token: '',
+        key: '',
+        value: ''
+      }
+    });
+    setExternalSystemFields(config.externalSystemFields || []);
+    setMappedFields(config.mappedFields || {});
     
-    // Move to step 1 to show the loaded configuration
-    setCurrentStep(1);
+    // Move to the direction selection step
+    setCurrentStep(0);
+    setActiveTab(0);
   };
 
   const handleNext = () => {
+    // Get the current step sequence
+    const steps = getSteps();
+    
+    // Find the current step's index in the sequence
+    const currentStepIndex = steps.findIndex(step => step.id === currentStep);
+    
     // Validate current step
+    if (currentStep === 0 && !integrationDirection) {
+      alert('Please select an integration direction');
+      return;
+    }
+    
     if (currentStep === 1 && !selectedEndpoint) {
       alert('Please select an endpoint');
       return;
@@ -363,23 +451,35 @@ export const IntegrationProvider = ({ children }) => {
       return;
     }
     
-    if (currentStep === 3 && selectedMethod === 'POST') {
-      // Validate required fields
-      const missingFields = requiredFields.filter(field => !fieldValues[field]);
-      if (missingFields.length > 0) {
-        alert(`Please fill in the required fields: ${missingFields.join(', ')}`);
+    if (currentStep === 7) {
+      // Validate external system configuration
+      if (!externalSystem.baseUrl || !externalSystem.endpoint) {
+        alert('Please provide the external system API details');
         return;
       }
     }
     
-    if (currentStep < 6) {
-      setCurrentStep(currentStep + 1);
+    if (currentStep === 9 && Object.keys(mappedFields).length === 0) {
+      alert('Please map at least one field');
+      return;
+    }
+    
+    // Move to next step if not at the end
+    if (currentStepIndex < steps.length - 1) {
+      setCurrentStep(steps[currentStepIndex + 1].id);
     }
   };
 
   const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+    // Get the current step sequence
+    const steps = getSteps();
+    
+    // Find the current step's index in the sequence
+    const currentStepIndex = steps.findIndex(step => step.id === currentStep);
+    
+    // Move to previous step if not at the beginning
+    if (currentStepIndex > 0) {
+      setCurrentStep(steps[currentStepIndex - 1].id);
     }
   };
 
@@ -394,7 +494,20 @@ export const IntegrationProvider = ({ children }) => {
           method: 'GET',
           fields: ['id', 'first_name', 'last_name', 'email', 'department', 'position'],
           filters: { status: 'active' },
-          pagination: { page: 1, per_page: 25 }
+          pagination: { page: 1, per_page: 25 },
+          integrationDirection: 'zenhr_to_external',
+          externalSystem: {
+            name: 'Sample CRM',
+            baseUrl: 'https://api.samplecrm.com',
+            endpoint: '/contacts',
+            method: 'POST',
+            auth: { type: 'api_key', key: 'X-API-Key', value: 'sample_key_123' }
+          },
+          mappedFields: {
+            'first_name': 'contact_first_name',
+            'last_name': 'contact_last_name',
+            'email': 'contact_email'
+          }
         },
         {
           id: '2',
@@ -403,11 +516,25 @@ export const IntegrationProvider = ({ children }) => {
           method: 'GET',
           fields: ['id', 'employee_id', 'date', 'check_in', 'check_out', 'status'],
           filters: { date_from: '2023-06-01', date_to: '2023-06-30' },
-          pagination: { page: 1, per_page: 50 }
+          pagination: { page: 1, per_page: 50 },
+          integrationDirection: 'zenhr_to_external',
+          externalSystem: {
+            name: 'Payroll System',
+            baseUrl: 'https://payroll-api.example.com',
+            endpoint: '/attendance-records',
+            method: 'POST',
+            auth: { type: 'bearer', token: 'sample_token_xyz' }
+          },
+          mappedFields: {
+            'employee_id': 'emp_id',
+            'date': 'attendance_date',
+            'check_in': 'time_in',
+            'check_out': 'time_out'
+          }
         },
         {
           id: '3',
-          name: 'New Employee Creation',
+          name: 'Applicant Import',
           endpoint: 'employees',
           method: 'POST',
           fields: ['department', 'position', 'salary', 'phone', 'address'],
@@ -419,6 +546,27 @@ export const IntegrationProvider = ({ children }) => {
             department: 'IT',
             position: 'Developer',
             salary: '5000'
+          },
+          integrationDirection: 'external_to_zenhr',
+          externalSystem: {
+            name: 'Recruiting Platform',
+            baseUrl: 'https://recruiting.example.com',
+            endpoint: '/api/applicants',
+            method: 'GET',
+            auth: { type: 'basic', username: 'apiuser', password: 'apisecret' }
+          },
+          externalSystemFields: [
+            { id: 'applicant_id', name: 'Applicant ID', type: 'string' },
+            { id: 'first_name', name: 'First Name', type: 'string' },
+            { id: 'last_name', name: 'Last Name', type: 'string' },
+            { id: 'email', name: 'Email', type: 'string' },
+            { id: 'applied_position', name: 'Applied Position', type: 'string' }
+          ],
+          mappedFields: {
+            'first_name': 'first_name',
+            'last_name': 'last_name',
+            'email': 'email',
+            'position': 'applied_position'
           }
         }
       ]);
@@ -466,7 +614,17 @@ export const IntegrationProvider = ({ children }) => {
     setActiveTab,
     showSaveModal,
     setShowSaveModal,
-    getEndpointFilters
+    getEndpointFilters,
+    // New bidirectional integration states and functions
+    integrationDirection,
+    setIntegrationDirection,
+    externalSystem,
+    setExternalSystem,
+    externalSystemFields,
+    setExternalSystemFields,
+    mappedFields,
+    setMappedFields,
+    getSteps
   };
 
   return (

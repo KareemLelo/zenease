@@ -1,16 +1,20 @@
-// src/components/IntegrationConfigurator.js
 import React from 'react';
 import { useIntegration } from '../contexts/IntegrationContext';
-import StepIndicator from './StepIndicator';
+import EnhancedStepIndicator from './EnhancedStepIndicator';
 import SaveConfigurationModal from './modals/SaveConfigurationModal';
 
 // Import step components
+import IntegrationDirection from './steps/IntegrationDirection';
 import SelectEndpoint from './steps/SelectEndpoint';
 import SelectFields from './steps/SelectFields';
 import ConfigureFilters from './steps/ConfigureFilters';
 import SetRequestDetails from './steps/SetRequestDetails';
 import ReviewGenerate from './steps/ReviewGenerate';
 import TestRequest from './steps/TestRequest';
+import ExternalEndpointConfig from './steps/ExternalEndpointConfig';
+import ExternalSystemFields from './steps/ExternalSystemFields';
+import FieldMapping from './steps/FieldMapping';
+
 const IntegrationConfigurator = () => {
   const { 
     currentStep, 
@@ -25,12 +29,15 @@ const IntegrationConfigurator = () => {
     activeTab,
     setActiveTab,
     selectedEndpoint,
-    selectedMethod
+    selectedMethod,
+    integrationDirection
   } = useIntegration();
 
-  // Render step content
+  // Render step content based on current step
   const renderStepContent = () => {
     switch (currentStep) {
+      case 0:
+        return <IntegrationDirection />;
       case 1:
         return <SelectEndpoint />;
       case 2:
@@ -43,8 +50,50 @@ const IntegrationConfigurator = () => {
         return <ReviewGenerate />;
       case 6:
         return <TestRequest />;
+      case 7:
+        return <ExternalEndpointConfig />;
+      case 8:
+        return <ExternalSystemFields />;
+      case 9:
+        return <FieldMapping />;
       default:
-        return <SelectEndpoint />;
+        return <IntegrationDirection />;
+    }
+  };
+
+  // Get steps based on integration direction for navigation logic
+  const getSteps = () => {
+    if (integrationDirection === 'zenhr_to_external') {
+      return [
+        { id: 0, label: 'Direction' },
+        { id: 1, label: 'ZenHR Endpoint' },
+        { id: 2, label: 'Choose Fields' },
+        { id: 7, label: 'External System' },
+        { id: 9, label: 'Map Fields' },
+        { id: 5, label: 'Review' },
+        { id: 6, label: 'Test' }
+      ];
+    } else if (integrationDirection === 'external_to_zenhr') {
+      return [
+        { id: 0, label: 'Direction' },
+        { id: 7, label: 'External System' },
+        { id: 8, label: 'Define Fields' },
+        { id: 1, label: 'ZenHR Endpoint' },
+        { id: 9, label: 'Map Fields' },
+        { id: 5, label: 'Review' },
+        { id: 6, label: 'Test' }
+      ];
+    } else { // bidirectional
+      return [
+        { id: 0, label: 'Direction' },
+        { id: 1, label: 'ZenHR Endpoint' },
+        { id: 2, label: 'ZenHR Fields' },
+        { id: 7, label: 'External System' },
+        { id: 8, label: 'External Fields' },
+        { id: 9, label: 'Map Fields' },
+        { id: 5, label: 'Review' },
+        { id: 6, label: 'Test' }
+      ];
     }
   };
 
@@ -55,11 +104,25 @@ const IntegrationConfigurator = () => {
 
   // Determine if next button should be disabled
   const isNextDisabled = () => {
+    if (currentStep === 0 && !integrationDirection) {
+      return true;
+    }
+    
     if (currentStep === 1 && !selectedEndpoint) {
       return true;
     }
+    
     return false;
   };
+
+  // Get the current steps sequence
+  const steps = getSteps();
+  
+  // Find current step index in the sequence
+  const currentStepIndex = steps.findIndex(step => step.id === currentStep);
+  
+  // Check if we're on the last step
+  const isLastStep = currentStepIndex === steps.length - 1;
 
   return (
     <div className="animate-fadeIn">
@@ -74,7 +137,7 @@ const IntegrationConfigurator = () => {
               <path d="M9 1.5V16.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M1.5 9H16.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            New Configuration
+            New Integration
           </div>
         </div>
         <div 
@@ -87,7 +150,7 @@ const IntegrationConfigurator = () => {
               <path d="M3.75 4.5H14.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M3.75 13.5H14.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            Saved Configurations
+            Saved Integrations
             <span className="badge badge-blue ml-2">{savedConfigurations.length}</span>
           </div>
         </div>
@@ -96,7 +159,7 @@ const IntegrationConfigurator = () => {
       {activeTab === 0 ? (
         <div className="card">
           {/* Step indicator */}
-          <StepIndicator currentStep={currentStep} />
+          <EnhancedStepIndicator />
           
           {/* Step content */}
           <div className="card-body">
@@ -107,8 +170,8 @@ const IntegrationConfigurator = () => {
           <div className="card-footer flex justify-between items-center">
             <button
               onClick={handleBack}
-              disabled={currentStep === 1}
-              className={`btn btn-outline ${currentStep === 1 ? 'btn-disabled' : ''}`}
+              disabled={currentStepIndex === 0}
+              className={`btn btn-outline ${currentStepIndex === 0 ? 'btn-disabled' : ''}`}
             >
               <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M10.6667 12.6667L5.33333 8.00004L10.6667 3.33337" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -127,7 +190,7 @@ const IntegrationConfigurator = () => {
                     <path d="M11.3333 14V9.33337H4.66667V14" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M4.66667 2V5.33333H10" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
-                  Save Configuration
+                  Save Integration
                 </button>
               )}
               
@@ -136,7 +199,7 @@ const IntegrationConfigurator = () => {
                 disabled={isNextDisabled()}
                 className={`btn btn-primary ${isNextDisabled() ? 'btn-disabled' : ''}`}
               >
-                {currentStep < 6 ? (
+                {!isLastStep ? (
                   <>
                     Next
                     <svg className="ml-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -158,7 +221,7 @@ const IntegrationConfigurator = () => {
       ) : (
         <div className="card">
           <div className="card-header">
-            <h2 className="text-lg font-semibold text-zenhr-blue m-0">Saved Configurations</h2>
+            <h2 className="text-lg font-semibold text-zenhr-blue m-0">Saved Integrations</h2>
             <p className="text-sm text-gray-600 m-0">Access your previously saved API configurations</p>
           </div>
           
@@ -174,7 +237,7 @@ const IntegrationConfigurator = () => {
                 </div>
                 <input
                   type="text"
-                  placeholder="Search configurations..."
+                  placeholder="Search integrations..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="input pl-10"
@@ -198,7 +261,9 @@ const IntegrationConfigurator = () => {
                           <span className="text-sm text-gray-600">{config.endpoint.replace(/_/g, ' ')}</span>
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
-                          {config.fields.length} fields selected
+                          {config.integrationDirection === 'zenhr_to_external' ? 'ZenHR → External' : 
+                           config.integrationDirection === 'external_to_zenhr' ? 'External → ZenHR' : 
+                           'Bidirectional'} • {config.fields.length} fields mapped
                         </p>
                       </div>
                       <button
@@ -223,17 +288,17 @@ const IntegrationConfigurator = () => {
                   <path d="M24 16V32" stroke="#0B3954" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   <path d="M16 24H32" stroke="#0B3954" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                <h3 className="text-lg font-semibold text-gray-700">No configurations found</h3>
+                <h3 className="text-lg font-semibold text-gray-700">No integrations found</h3>
                 <p className="text-gray-500 max-w-md mx-auto">
                   {searchTerm ? 
                     `No results matching "${searchTerm}". Try a different search term.` : 
-                    'Start by creating a new API configuration.'}
+                    'Start by creating a new integration configuration.'}
                 </p>
                 <button 
                   className="btn btn-primary mt-4"
                   onClick={() => setActiveTab(0)}
                 >
-                  Create New Configuration
+                  Create New Integration
                 </button>
               </div>
             )}
